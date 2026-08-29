@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 330" role="img" aria-labelledby="title desc">
+  <title id="title">Agent Evaluation and Safety Harness</title><desc id="desc">A stylized agent trace passing through evaluation and safety checks.</desc>
+  <defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#08152f"/><stop offset=".55" stop-color="#173e73"/><stop offset="1" stop-color="#315fd4"/></linearGradient><radialGradient id="glow"><stop stop-color="#7fb0ff" stop-opacity=".45"/><stop offset="1" stop-color="#7fb0ff" stop-opacity="0"/></radialGradient></defs>
+  <rect width="1200" height="330" rx="24" fill="url(#g)"/><circle cx="1000" cy="80" r="240" fill="url(#glow)"/>
+  <g fill="none" stroke="#77a7ff" opacity=".5"><path d="M70 255C260 110 350 285 530 150S840 95 1120 185" stroke-width="3"/><path d="M70 275C250 170 420 310 610 185S910 140 1120 225"/></g>
+  <g font-family="system-ui"><text x="70" y="92" fill="#91b8ff" font-size="14" font-weight="800" letter-spacing="3">OBSERVE · EVALUATE · MITIGATE</text><text x="70" y="145" fill="#fff" font-size="43" font-weight="750">Agent Evaluation</text><text x="70" y="198" fill="#fff" font-size="43" font-weight="750">+ Safety Harness</text><text x="70" y="239" fill="#bed0e8" font-size="18">Production gates for tool-using AI agents.</text></g>
+  <g transform="translate(850 92)" fill="none" stroke="#fff"><path d="M80 0l72 26v55c0 56-34 91-72 109C42 172 8 137 8 81V26z" stroke-width="7"/><path d="M47 91l23 23 47-52" stroke="#82f0c3" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></g>
+</svg>

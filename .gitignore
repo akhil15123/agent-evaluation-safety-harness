@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+report*.json
+report*.html
+review-queue.json
+dashboard.html
+.DS_Store

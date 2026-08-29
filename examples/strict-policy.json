@@ -1,0 +1,11 @@
+{
+  "block_prompt_injection": true,
+  "block_secret_leakage": true,
+  "block_pii": true,
+  "allowed_tools": ["lookup_order", "search_policy", "verify_identity"],
+  "denied_phrases": ["guaranteed lifetime warranty"],
+  "max_output_chars": 800,
+  "risk_threshold": 0.35,
+  "injection_action": "block",
+  "min_confidence": 0.7
+}

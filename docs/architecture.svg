@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 510" role="img" aria-labelledby="title desc">
+  <title id="title">Agent Harness architecture</title><desc id="desc">Evaluation suites enter a policy gate, then an agent adapter, trace store, evaluators, and finally reports, dashboard, and human review.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0d1b36"/><stop offset="1" stop-color="#193b65"/></linearGradient><filter id="shadow"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-opacity=".18"/></filter><marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0 0L8 3 0 6z" fill="#70a5ff"/></marker></defs>
+  <rect width="1200" height="510" rx="28" fill="url(#bg)"/>
+  <text x="50" y="58" fill="#fff" font-family="system-ui" font-size="25" font-weight="700">Evaluation and safety pipeline</text><text x="50" y="84" fill="#a9bad3" font-family="system-ui" font-size="14">Pre-execution controls · observable agent path · evidence-backed release gate</text>
+  <g font-family="system-ui" filter="url(#shadow)">
+    <g transform="translate(48 134)"><rect width="190" height="112" rx="14" fill="#fff"/><text x="18" y="31" fill="#3366ff" font-size="12" font-weight="800">INPUT</text><text x="18" y="59" fill="#12213c" font-size="19" font-weight="700">Eval suite</text><text x="18" y="84" fill="#65758b" font-size="13">Cases · expectations · policy</text></g>
+    <g transform="translate(286 134)"><rect width="190" height="112" rx="14" fill="#fff"/><text x="18" y="31" fill="#c26a17" font-size="12" font-weight="800">MITIGATE</text><text x="18" y="59" fill="#12213c" font-size="19" font-weight="700">Policy gate</text><text x="18" y="84" fill="#65758b" font-size="13">Injection · confidence · tools</text></g>
+    <g transform="translate(524 134)"><rect width="190" height="112" rx="14" fill="#fff"/><text x="18" y="31" fill="#8c4dce" font-size="12" font-weight="800">EXECUTE</text><text x="18" y="59" fill="#12213c" font-size="19" font-weight="700">Agent adapter</text><text x="18" y="84" fill="#65758b" font-size="13">Demo · recorded · HTTP</text></g>
+    <g transform="translate(762 134)"><rect width="190" height="112" rx="14" fill="#fff"/><text x="18" y="31" fill="#078061" font-size="12" font-weight="800">OBSERVE</text><text x="18" y="59" fill="#12213c" font-size="19" font-weight="700">Flight recorder</text><text x="18" y="84" fill="#65758b" font-size="13">Trace · evidence capsule</text></g>
+    <g transform="translate(1000 134)"><rect width="152" height="112" rx="14" fill="#fff"/><text x="18" y="31" fill="#c13d52" font-size="12" font-weight="800">SCORE</text><text x="18" y="59" fill="#12213c" font-size="19" font-weight="700">Evaluators</text><text x="18" y="84" fill="#65758b" font-size="13">Quality + safety</text></g>
+  </g>
+  <g stroke="#70a5ff" stroke-width="3" fill="none" marker-end="url(#arrow)"><path d="M238 190h40"/><path d="M476 190h40"/><path d="M714 190h40"/><path d="M952 190h40"/></g>
+  <path d="M1076 255v65" stroke="#70a5ff" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+  <g font-family="system-ui" filter="url(#shadow)">
+    <g transform="translate(882 340)"><rect width="270" height="114" rx="14" fill="#17385e" stroke="#4c719a"/><text x="18" y="32" fill="#9ec1ff" font-size="12" font-weight="800">RELEASE EVIDENCE</text><text x="18" y="61" fill="#fff" font-size="19" font-weight="700">Reports + trace diff</text><text x="18" y="87" fill="#b7c5d9" font-size="13">Dashboard · policy replay</text></g>
+    <g transform="translate(524 340)"><rect width="310" height="114" rx="14" fill="#17385e" stroke="#4c719a"/><text x="18" y="32" fill="#9ec1ff" font-size="12" font-weight="800">HUMAN-IN-THE-LOOP</text><text x="18" y="61" fill="#fff" font-size="19" font-weight="700">Review queue</text><text x="18" y="87" fill="#b7c5d9" font-size="13">Failed · ambiguous · low-confidence</text></g>
+  </g>
+  <path d="M882 397h-40" stroke="#70a5ff" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+</svg>
