@@ -22,11 +22,14 @@ def write_regression_dashboard(report_paths: list[str], output: str) -> None:
     def pct(value: float) -> str:
         return f"{value:.0%}"
 
-    rows = "".join(f"""
-      <tr><td><strong>{html.escape(run['label'])}</strong><small>{html.escape(run['finished'][:19])}</small></td><td>{html.escape(run['model'])}</td>
-      <td>{pct(run['pass_rate'])}</td><td>{pct(run['task_completion'])}</td><td>{pct(run['groundedness'])}</td><td>{pct(run['tool_correctness'])}</td>
-      <td class="{'bad' if run['hallucination_rate'] else ''}">{pct(run['hallucination_rate'])}</td><td>{pct(run['safety_pass_rate'])}</td><td>${run['total_cost_usd']:.5f}</td><td>{run['total_latency_ms']:.0f} ms</td></tr>
-    """ for run in runs)
+    rows = "".join(
+        "\n".join([
+            f"<tr><td><strong>{html.escape(run['label'])}</strong><small>{html.escape(run['finished'][:19])}</small></td><td>{html.escape(run['model'])}</td>",
+            f"<td>{pct(run['pass_rate'])}</td><td>{pct(run['task_completion'])}</td><td>{pct(run['groundedness'])}</td><td>{pct(run['tool_correctness'])}</td>",
+            f'<td class="{"bad" if run["hallucination_rate"] else ""}">{pct(run["hallucination_rate"])}</td><td>{pct(run["safety_pass_rate"])}</td><td>${run["total_cost_usd"]:.5f}</td><td>{run["total_latency_ms"]:.0f} ms</td></tr>',
+        ])
+        for run in runs
+    )
     latest = runs[-1] if runs else {}
     previous = runs[-2] if len(runs) > 1 else latest
 

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-harness.dev/schemas/report-v1.json",
+  "title": "Agent Harness Evaluation Report",
+  "type": "object",
+  "required": ["suite_name", "results", "started_at", "finished_at", "summary"],
+  "properties": {
+    "suite_name": {"type": "string"},
+    "results": {"type": "array", "items": {"type": "object", "required": ["case_id", "passed", "metrics", "trace"]}},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "metadata": {"type": "object"},
+    "summary": {"type": "object"}
+  },
+  "additionalProperties": false
+}

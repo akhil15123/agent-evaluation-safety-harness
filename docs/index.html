@@ -20,15 +20,15 @@
   </style>
 </head>
 <body>
-  <div class="hero"><div class="wrap"><div class="eyebrow">AGENT EVALUATION + SAFETY HARNESS</div><h1>Failures become proof.</h1><p class="lead">A dependency-free agent flight recorder with evidence capsules, first-divergence trace forensics, and offline policy replay.</p><div class="actions"><a class="button" href="dashboard.html">Open regression dashboard</a><a class="button secondary" href="https://github.com/akhil15123/agent-evaluation-safety-harness">View on GitHub</a></div></div></div>
+  <div class="hero"><div class="wrap"><div class="eyebrow">AGENT EVALUATION + SAFETY HARNESS · v1.0</div><h1>Failures become proof.</h1><p class="lead">A local-first agent flight recorder with typed tool sandboxes, evidence capsules, first-divergence trace forensics, human review, and offline policy replay.</p><div class="actions"><a class="button" href="dashboard.html">Open regression dashboard</a><a class="button secondary" href="walkthrough/agent-harness.mp4">Watch real CLI run</a><a class="button secondary" href="https://github.com/akhil15123/agent-evaluation-safety-harness">View on GitHub</a></div></div></div>
   <section><div class="wrap"><p class="loop">failure → evidence → mitigation → replay → regression proof</p><div class="grid">
-    <a class="card" href="sample-report.html"><strong>Evaluation report</strong><span>Seven normal, edge, privacy, injection, hallucination, confidence, and tool-policy cases.</span></a>
+    <a class="card" href="workflow-report.html"><strong>Cross-workflow report</strong><span>Nine email, calendar, file-search, code-review, recruiter, injection, and approval cases.</span></a>
     <a class="card" href="trace-comparison.html"><strong>Trace comparison</strong><span>See the first agent step where the safe candidate diverges from its baseline.</span></a>
     <a class="card" href="policy-replay.json"><strong>Policy lab</strong><span>Counterfactual blocks, prevented tool calls, and human routes from a saved trace.</span></a>
-    <a class="card" href="demo.mp4"><strong>20-second demo</strong><span>A quick visual walkthrough of the complete release-gate workflow.</span></a>
+    <a class="card" href="walkthrough/agent-harness.mp4"><strong>Real terminal walkthrough</strong><span>Actual CLI execution: evaluation, repeated experiment, trace diff, and policy replay.</span></a>
     <a class="card" href="architecture.svg"><strong>Architecture</strong><span>Input gate, adapters, flight recorder, evaluators, reporting, and review.</span></a>
     <a class="card" href="technical-writeup.md"><strong>Technical writeup</strong><span>Design goals, metrics, threat model, tradeoffs, and next steps.</span></a>
   </div></div></section>
-  <footer>Agent Harness · MIT licensed · zero runtime dependencies</footer>
+  <footer>Agent Harness v1.0 · MIT licensed · zero core runtime dependencies</footer>
 </body>
 </html>

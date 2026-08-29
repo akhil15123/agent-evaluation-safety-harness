@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a reproducible defect in Agent Harness
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include the command, smallest suite/case, and observed output. Remove secrets and personal data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Agent Harness and Python versions
+      placeholder: "agent-harness 1.0.0; Python 3.12"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Adapter/provider, operating system, sanitized trace, or other useful details.

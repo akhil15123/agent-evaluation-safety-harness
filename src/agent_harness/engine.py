@@ -17,7 +17,8 @@ class EvaluationEngine:
         for case in suite.cases:
             try:
                 mitigations: list[str] = []
-                injection = detect_prompt_injection(case.prompt) if suite.policy.block_prompt_injection else None
+                injection_source = next((turn for turn in [case.prompt, *case.turns] if detect_prompt_injection(turn)), None) if suite.policy.block_prompt_injection else None
+                injection = detect_prompt_injection(injection_source) if injection_source else None
                 if injection and suite.policy.injection_action == "block":
                     mitigations.append("prompt_injection_blocked")
                     response = AgentResponse(
@@ -28,7 +29,7 @@ class EvaluationEngine:
                             "step": 1,
                             "type": "guardrail",
                             "name": "prompt_injection_detector",
-                            "input": case.prompt,
+                            "input": injection_source,
                             "output": f"blocked: {injection}",
                             "status": "blocked",
                             "latency_ms": 0.0,
@@ -44,7 +45,15 @@ class EvaluationEngine:
                 risk = calculate_risk(findings)
                 safety_pass = risk <= suite.policy.risk_threshold
                 metrics = calculate_metrics(case, response, checks, safety_pass)
-                passed = all(check.passed for check in checks) and safety_pass and metrics["hallucination_rate"] == 0 and metrics["tool_correctness"] == 1
+                passed = (
+                    all(check.passed for check in checks)
+                    and safety_pass
+                    and metrics["hallucination_rate"] == 0
+                    and metrics["tool_correctness"] == 1
+                    and metrics["argument_correctness"] == 1
+                    and metrics["tool_order_correctness"] == 1
+                    and metrics["trajectory_quality"] == 1
+                )
                 needs_review = not passed or response.confidence < suite.policy.min_confidence
                 result = CaseResult(
                     case_id=case.id,
@@ -54,6 +63,7 @@ class EvaluationEngine:
                     quality_score=round(quality, 4),
                     risk_score=risk,
                     latency_ms=round(response.latency_ms, 2),
+                    turns=case.turns,
                     checks=checks,
                     findings=findings,
                     tool_calls=response.tool_calls,
@@ -77,6 +87,7 @@ class EvaluationEngine:
                     quality_score=0.0,
                     risk_score=1.0,
                     latency_ms=0.0,
+                    turns=case.turns,
                     error=str(exc),
                     needs_review=True,
                 )

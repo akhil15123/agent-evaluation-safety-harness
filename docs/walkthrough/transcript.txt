@@ -1,0 +1,21 @@
+$ agent-harness run examples/workflows-suite.json --workflow-agent --json /tmp/walkthrough-report.json --db /tmp/walkthrough.db --jsonl-trace /tmp/walkthrough.jsonl
+
+Database run: adb559727d174daa812ea8ca37ea0579
+JSONL trace: /tmp/walkthrough.jsonl
+PASS  Cross-Workflow Agent Production Gate  9 cases  100% passed  risk 4%
+JSON report: /tmp/walkthrough-report.json
+
+$ agent-harness experiment examples/workflows-suite.json --workflow-agent --trials 3 --workers 3 --seed 42 --output /tmp/walkthrough-experiment.json
+
+Experiment: 100% mean pass · 95% CI [0.8754, 1.0] · 0 flaky
+Experiment report: /tmp/walkthrough-experiment.json
+
+$ agent-harness compare docs/runs/baseline-v1.json docs/runs/guardrailed-v2.json --json /tmp/walkthrough-comparison.json
+
+Trace diff: 2 fixed, 0 regressed, 0 still failing
+Comparison: /tmp/walkthrough-comparison.json
+
+$ agent-harness replay docs/runs/baseline-v1.json examples/strict-policy.json --output /tmp/walkthrough-replay.json
+
+Policy replay: 1 blocks, 0 tool calls prevented, 1 human routes
+Replay: /tmp/walkthrough-replay.json

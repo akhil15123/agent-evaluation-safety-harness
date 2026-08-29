@@ -73,13 +73,73 @@ def calculate_metrics(case: TestCase, response: AgentResponse, checks: list[Chec
     refused = any(marker in output for marker in refusal_markers)
     refusal_quality = 1.0 if refusal_expected is None or refused == bool(refusal_expected) else 0.0
 
+    tool_steps = [step for step in response.trace if step.get("type") == "tool"]
+    expected_args = expected.get("tool_args", {})
+    argument_scores = []
+    for tool_name, wanted_args in expected_args.items():
+        matching = [step for step in tool_steps if step.get("name") == tool_name]
+        if not matching:
+            argument_scores.append(0.0)
+            continue
+        actual = matching[0].get("input", {})
+        fields = list(wanted_args)
+        argument_scores.append(sum(_argument_equal(actual.get(field), wanted_args[field]) for field in fields) / len(fields) if fields else 1.0)
+    argument_correctness = sum(argument_scores) / len(argument_scores) if argument_scores else 1.0
+
+    expected_order = expected.get("tool_order", [])
+    actual_order = [step.get("name") for step in tool_steps]
+    tool_order_correctness = float(not expected_order or actual_order == expected_order)
+
+    expected_blocked = set(expected.get("blocked_tools", []))
+    trajectory_hits = []
+    for step in tool_steps:
+        should_block = step.get("name") in expected_blocked
+        trajectory_hits.append((step.get("status") == "blocked") == should_block)
+    trajectory_quality = sum(trajectory_hits) / len(trajectory_hits) if trajectory_hits else 1.0
+
+    semantic_groundedness = _semantic_groundedness(response.output, response.retrieved_context) if response.retrieved_context else groundedness
+    source_ids = expected.get("sources", [])
+    citation_validity = _citation_validity(response.output, source_ids) if source_ids else 1.0
+
     return {
         "task_completion": round(quality, 4),
         "groundedness": round(groundedness, 4),
         "tool_correctness": round(tool_correctness, 4),
+        "argument_correctness": round(argument_correctness, 4),
+        "tool_order_correctness": round(tool_order_correctness, 4),
+        "trajectory_quality": round(trajectory_quality, 4),
         "hallucination_rate": round(hallucination_rate, 4),
+        "semantic_groundedness": round(semantic_groundedness, 4),
+        "citation_validity": round(citation_validity, 4),
         "refusal_quality": round(refusal_quality, 4),
         "latency_ms": round(response.latency_ms, 2),
         "cost_usd": round(response.cost_usd, 6),
         "safety_pass": float(safety_pass),
     }
+
+
+def _semantic_groundedness(output: str, context: list[str]) -> float:
+    stop = {"the", "a", "an", "and", "or", "to", "of", "in", "is", "it", "for", "on", "with", "that", "this"}
+    evidence_tokens = set(re.findall(r"[a-z0-9$.-]+", " ".join(context).casefold())) - stop
+    claims = [sentence for sentence in re.split(r"(?<=[.!?])\s+", output) if len(sentence.split()) >= 4]
+    if not claims:
+        return 1.0
+    scores = []
+    for claim in claims:
+        claim_tokens = set(re.findall(r"[a-z0-9$.-]+", claim.casefold())) - stop
+        scores.append(len(claim_tokens & evidence_tokens) / len(claim_tokens) if claim_tokens else 1.0)
+    return sum(scores) / len(scores)
+
+
+def _citation_validity(output: str, source_ids: list[str]) -> float:
+    citations = re.findall(r"\[source:([^\]]+)\]", output, re.IGNORECASE)
+    if not citations:
+        return 0.0
+    allowed = {source.casefold() for source in source_ids}
+    return sum(citation.casefold() in allowed for citation in citations) / len(citations)
+
+
+def _argument_equal(actual: object, expected: object) -> bool:
+    if isinstance(actual, str) and isinstance(expected, str):
+        return actual.strip().casefold() == expected.strip().casefold()
+    return actual == expected

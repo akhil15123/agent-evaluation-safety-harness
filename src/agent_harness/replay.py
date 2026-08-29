@@ -33,6 +33,15 @@ def replay_policy(report_path: str, policy_path: str, output_path: str) -> dict:
             "risk_score": risk,
             "finding_categories": [finding.category for finding in findings],
             "safety_pass": would_block or risk <= policy.risk_threshold,
+            "proof": {
+                "deterministic": [
+                    *(["input_gate_matches_recorded_prompt"] if would_block else []),
+                    *(["confidence_threshold_routes_recorded_score"] if response.confidence < policy.min_confidence else []),
+                    *(["output_policy_detects_recorded_evidence"] if findings else []),
+                ],
+                "estimated": [],
+                "requires_rerun": ["model_output_after_intervention"] if would_block or findings else [],
+            },
         })
     replay = {
         "source_report": str(report_path),
@@ -43,6 +52,7 @@ def replay_policy(report_path: str, policy_path: str, output_path: str) -> dict:
             "prevented_tool_calls": sum(len(case["prevented_tool_calls"]) for case in cases),
             "human_routes": sum(case["would_route_to_human"] for case in cases),
             "safety_pass_rate": sum(case["safety_pass"] for case in cases) / len(cases) if cases else 0,
+            "cases_requiring_model_rerun": sum(bool(case["proof"]["requires_rerun"]) for case in cases),
         },
         "cases": cases,
     }

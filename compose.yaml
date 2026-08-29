@@ -1,0 +1,12 @@
+services:
+  dashboard:
+    build: .
+    ports: ["8765:8765"]
+    volumes: ["agent-harness-data:/data"]
+    environment:
+      AGENT_HARNESS_AUTH_TOKEN: ${AGENT_HARNESS_AUTH_TOKEN:-change-me}
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+volumes:
+  agent-harness-data:

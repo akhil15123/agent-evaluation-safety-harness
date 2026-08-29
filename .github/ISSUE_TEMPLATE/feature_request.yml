@@ -1,0 +1,24 @@
+name: Feature request
+description: Propose an evaluation, safety, or workflow capability
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What production failure or workflow is hard to evaluate today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include an example suite case, metric, trace, or tool contract when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and compatibility considerations
+      description: Note side effects, trust boundaries, privacy, schema, or backward-compatibility concerns.

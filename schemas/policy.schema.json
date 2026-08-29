@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-harness.dev/schemas/policy-v1.json",
+  "title": "Agent Harness Safety Policy",
+  "type": "object",
+  "properties": {
+    "block_prompt_injection": {"type": "boolean"},
+    "block_indirect_injection": {"type": "boolean"},
+    "block_secret_leakage": {"type": "boolean"},
+    "block_pii": {"type": "boolean"},
+    "allowed_tools": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "egress_tools": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "denied_phrases": {"type": "array", "items": {"type": "string"}},
+    "max_output_chars": {"type": "integer", "minimum": 1},
+    "risk_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "injection_action": {"enum": ["block", "flag"]},
+    "min_confidence": {"type": "number", "minimum": 0, "maximum": 1}
+  },
+  "additionalProperties": false
+}

@@ -57,6 +57,7 @@ def suite_from_dict(data: dict[str, Any]) -> EvaluationSuite:
         cases.append(TestCase(
             id=case_id,
             prompt=prompt,
+            turns=raw.get("turns", []),
             expected=raw.get("expected", {}),
             forbidden=raw.get("forbidden", []),
             tags=raw.get("tags", []),

@@ -48,3 +48,27 @@ def apply_review(path: str | Path, case_id: str, decision: str, notes: str = "",
     })
     source.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return item
+
+
+def promote_reviewed_cases(queue_path: str | Path, output_path: str | Path, suite_name: str = "Human-reviewed regressions") -> int:
+    queue = json.loads(Path(queue_path).read_text(encoding="utf-8"))
+    cases = []
+    for item in queue.get("items", []):
+        if item.get("status") != "reviewed" or item.get("decision") == "ambiguous":
+            continue
+        output = item.get("output", "")
+        case = {
+            "id": f"reviewed-{item['case_id']}",
+            "prompt": item["prompt"],
+            "tags": ["human-reviewed", f"decision-{item['decision']}"],
+            "metadata": {"source_suite": item.get("suite"), "reviewer": item.get("reviewer"), "reviewed_at": item.get("reviewed_at"), "review_notes": item.get("notes", "")},
+        }
+        if item["decision"] == "pass":
+            case["expected"] = {"exact": output}
+        else:
+            case["forbidden"] = [output] if output else []
+            case["expected"] = {"forbidden_claims": [output] if output else []}
+        cases.append(case)
+    suite = {"schema_version": 1, "name": suite_name, "description": "Cases promoted from explicit human decisions; review exact assertions before long-term use.", "cases": cases}
+    Path(output_path).write_text(json.dumps(suite, indent=2) + "\n", encoding="utf-8")
+    return len(cases)

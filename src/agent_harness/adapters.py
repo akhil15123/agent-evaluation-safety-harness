@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -100,3 +101,42 @@ class HttpAdapter:
             model=body.get("model", "http-agent"),
             metadata=body.get("metadata", {}),
         )
+
+
+class ResilientAdapter:
+    """Provider-neutral request pacing and bounded retry wrapper."""
+
+    def __init__(self, adapter: AgentAdapter, requests_per_second: float = 0.0, retries: int = 0):
+        self.adapter = adapter
+        self.interval = 1 / requests_per_second if requests_per_second > 0 else 0.0
+        self.retries = max(0, retries)
+        self._lock = threading.Lock()
+        self._next_request = 0.0
+
+    def invoke(self, case: TestCase) -> AgentResponse:
+        last_error: Exception | None = None
+        for attempt in range(self.retries + 1):
+            self._pace()
+            try:
+                return self.adapter.invoke(case)
+            except RuntimeError as exc:
+                last_error = exc
+                if attempt >= self.retries or not _retryable(str(exc)):
+                    raise
+                time.sleep(min(2**attempt * 0.25, 4.0))
+        raise RuntimeError(str(last_error))
+
+    def _pace(self) -> None:
+        if not self.interval:
+            return
+        with self._lock:
+            now = time.monotonic()
+            wait = max(0.0, self._next_request - now)
+            self._next_request = max(now, self._next_request) + self.interval
+        if wait:
+            time.sleep(wait)
+
+
+def _retryable(message: str) -> bool:
+    lowered = message.casefold()
+    return any(marker in lowered for marker in ("http 429", "http 500", "http 502", "http 503", "http 504", "timed out", "temporarily unavailable"))

@@ -6,7 +6,7 @@ from agent_harness.demo_agent import SupportAgentAdapter
 from agent_harness.engine import EvaluationEngine
 from agent_harness.loaders import load_suite, suite_from_dict
 from agent_harness.models import AgentResponse
-from agent_harness.review import apply_review, write_review_queue
+from agent_harness.review import apply_review, promote_reviewed_cases, write_review_queue
 
 
 def test_demo_suite_passes():
@@ -35,3 +35,6 @@ def test_review_queue_round_trip(tmp_path):
     item = json.loads(queue.read_text())["items"][0]
     assert item["status"] == "reviewed"
     assert item["reviewer"] == "alex"
+    promoted = tmp_path / "promoted.json"
+    assert promote_reviewed_cases(queue, promoted) == 1
+    assert json.loads(promoted.read_text())["cases"][0]["tags"] == ["human-reviewed", "decision-fail"]

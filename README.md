@@ -12,7 +12,7 @@
 
 Agent Harness is a dependency-free **agent flight recorder** for evaluating tool-using AI agents before they reach production. It runs normal and adversarial tasks, captures every agent step, scores quality and safety, routes uncertain failures to humans, and renders self-contained reports for CI or local review.
 
-The repository includes a deterministic customer-support agent so the complete workflow runs offline—no API key or paid model required.
+The repository includes deterministic customer-support, email, calendar, file-search, code-review, and recruiter workflows, so the complete safety loop runs offline. Native OpenAI Responses, Anthropic Messages, Ollama, recorded-response, and generic HTTP adapters are included for real agents.
 
 ## The distinctive idea: failures become proof
 
@@ -31,22 +31,37 @@ cd agent-evaluation-safety-harness
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 
-agent-harness run examples/support-suite.json \
-  --demo-agent --model support-agent-v2 \
-  --json report-v2.json --html report-v2.html \
-  --review-queue review-queue.json --label "guardrailed-v2"
+agent-harness run examples/workflows-suite.json \
+  --workflow-agent --json report.json --html report.html \
+  --review-queue review-queue.json --db agent-harness.db \
+  --jsonl-trace traces.jsonl --label "sandboxed-v1"
+
+agent-harness serve --db agent-harness.db
 ```
 
 Expected result:
 
 ```text
 Review queue: review-queue.json (1 cases)
-PASS  Acme Support Agent — Production Gate  7 cases  100% passed  risk 0%
-JSON report: report-v2.json
-HTML report: report-v2.html
+PASS  Cross-Workflow Agent Production Gate  9 cases  100% passed  risk 4%
+JSON report: report.json
+HTML report: report.html
 ```
 
-Watch the [demo video](docs/demo.mp4) or open the [sample regression dashboard](docs/dashboard.html).
+Watch the [real terminal walkthrough](docs/walkthrough/agent-harness.mp4), replay its [asciinema cast](docs/walkthrough/agent-harness.cast), or open the [sample regression dashboard](docs/dashboard.html).
+
+<img src="docs/walkthrough/agent-harness.gif" alt="Real Agent Harness CLI walkthrough" width="100%">
+
+## Production capabilities
+
+- Typed tool contracts validate required fields, types, enums, patterns, and unknown arguments before execution.
+- Consequential writes require explicit per-case confirmation; every workflow receives an isolated state copy.
+- Canary values are tracked into egress tools and blocked before side effects.
+- Retrieved email/file instructions are treated as untrusted and scanned for indirect prompt injection.
+- Concurrent repeated trials report mean pass rate, standard deviation, Wilson confidence interval, p50/p95 latency, total cost, and flaky cases.
+- SQLite stores complete runs and review items. The authenticated web console provides filters, trace drill-down, evidence capsules, and concurrency-safe human decisions.
+- Redacted JSONL flight-recorder output and optional OpenTelemetry OTLP spans support operational tracing.
+- Versioned suite, policy, and report JSON Schemas keep datasets and integrations reviewable.
 
 ## Trace forensics and policy lab
 
@@ -69,12 +84,17 @@ The first command separates a model-answer change from a tool-selection or guard
 | Task completion | Did the agent satisfy the request? | Exact, contains, regex, length, and forbidden-output checks |
 | Groundedness | Are required claims present in retrieved evidence? | Evidence-to-output fact matching |
 | Tool correctness | Were only the expected tools used? | Expected/actual tool-set overlap plus allowlist enforcement |
+| Argument correctness | Did tools receive the right typed values? | Field-level schema-aware argument comparison |
+| Tool order | Did the trajectory follow the required sequence? | Explicit ordered-call assertions |
+| Trajectory quality | Were required calls executed and dangerous calls blocked? | Step-status evaluation over the full trace |
 | Hallucination rate | Did known false claims appear? | Per-case hallucination traps and forbidden claims |
+| Semantic groundedness | Does the answer overlap retrieved evidence beyond exact fixture phrases? | Deterministic claim/evidence token support plus optional judge model |
+| Citation validity | Do declared source identifiers resolve? | Source-ID validation |
 | Refusal quality | Did the agent refuse only when it should? | Expected-refusal comparison |
 | Safety pass rate | Did the output clear all policies? | Injection, secret, PII, content, tool, and output-limit scanners |
 | Latency and cost | What does this behavior cost? | Per-call and aggregate timing/token/cost fields |
 
-The included suite covers normal requests, ambiguous edge cases, prompt injection, privacy leaks, hallucination traps, low-confidence routing, and unauthorized tool use.
+The suites cover normal requests, ambiguous edge cases, direct and indirect prompt injection, privacy leaks, data-exfiltration canaries, hallucination traps, low-confidence routing, confirmation gates, argument errors, and unauthorized tool use.
 
 ## Architecture
 
@@ -82,10 +102,11 @@ The included suite covers normal requests, ambiguous edge cases, prompt injectio
 
 1. A JSON suite declares cases, expected behavior, and policy thresholds.
 2. The policy gate blocks prompt injection before an agent or tool runs.
-3. An adapter invokes the built-in demo agent, a recorded run, or any HTTP agent.
-4. The trace captures prompts, retrieval, tools, model output, timing, cost, and failure reasons.
-5. Evaluators produce per-case metrics and a release-gate decision.
-6. Reports feed the regression dashboard and failed or uncertain cases enter human review.
+3. An adapter invokes the offline workflow agent, OpenAI, Anthropic, Ollama, a recorded run, or any HTTP agent.
+4. Typed tools execute inside an isolated state sandbox with argument contracts, confirmation gates, and canary egress controls.
+5. The flight recorder captures prompts, provenance, tools, arguments, outputs, timing, cost, mitigations, and failure reasons.
+6. Deterministic and optional judge evaluators produce case metrics; repeated trials add statistical confidence and flake detection.
+7. SQLite, JSON/HTML evidence, OpenTelemetry, the regression dashboard, and the human-review console consume the same report contract.
 
 See the [technical writeup](docs/technical-writeup.md) for design decisions, threat model, and extension points.
 
@@ -124,7 +145,31 @@ Your endpoint returns `output` plus optional observability fields:
 
 Use `--recorded responses.json` to replay model outputs deterministically in CI. Secrets used as headers can be referenced through environment variables and are never written to reports by the harness.
 
-## Regression dashboard
+### Native providers
+
+```bash
+export OPENAI_API_KEY=...       # or ANTHROPIC_API_KEY
+
+agent-harness run benchmarks/provider-smoke.json \
+  --openai --model gpt-5-mini --json openai-report.json
+
+agent-harness experiment benchmarks/provider-smoke.json \
+  --openai --model gpt-5-mini --trials 3 --workers 3 \
+  --requests-per-second 2 --retries 3 \
+  --output openai-experiment.json
+```
+
+The checked-in [OpenAI report](docs/runs/openai-gpt-5-mini.json) and [three-trial experiment](docs/runs/openai-gpt-5-mini-experiment.json) were produced through the real Responses API. The report includes token-derived cost using the documented model rate, measured latency, actual function calls, typed arguments, and sanitized traces. Provider keys and authorization headers are never serialized.
+
+## Persistent console and regression dashboard
+
+```bash
+agent-harness run examples/workflows-suite.json --workflow-agent \
+  --db harness.db --json report.json
+AGENT_HARNESS_AUTH_TOKEN=local-secret agent-harness serve --db harness.db
+```
+
+The local console persists runs, supports filtering and trace drill-down, and lets reviewers decide queued cases with an optimistic version check that prevents one reviewer from silently overwriting another.
 
 Compare reports in chronological order:
 
@@ -145,6 +190,26 @@ agent-harness review review-queue.json edge-ambiguous-request \
 ```
 
 Review records retain the original prompt/output, metrics, reasons, decision, notes, reviewer, and timestamp so ambiguous judgments are auditable and reusable as future eval labels.
+
+Promote reviewed failures into a permanent regression suite, and generate traceable adversarial variants from either a suite or a failed report:
+
+```bash
+agent-harness promote-reviews review-queue.json --output human-regressions.json
+agent-harness generate-redteam examples/workflows-suite.json \
+  --variants 3 --output generated-redteam.json
+```
+
+## Judge calibration and observability
+
+Deterministic checks remain the release authority. An optional OpenAI judge can add a semantic signal, which can then be calibrated against explicit human pass/fail labels instead of trusting an arbitrary threshold:
+
+```bash
+agent-harness judge report.json --model gpt-5-mini --output judged.json
+agent-harness calibrate-judge judged.json review-queue.json \
+  --metric task_completion --output judge-calibration.json
+```
+
+Use `--jsonl-trace traces.jsonl` for a redacted local flight recorder, or install `.[observability]` and add `--otel` to export spans to the configured OTLP endpoint. Provider calls support bounded retries and `--requests-per-second` pacing.
 
 ## Suite format
 
@@ -175,15 +240,19 @@ Review records retain the original prompt/output, metrics, reasons, decision, no
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e . pytest
-pytest -q
+pip install -e '.[dev]'
+ruff check src tests
+mypy src/agent_harness
+coverage run -m pytest -q && coverage report
+python -m build
+docker compose up --build
 ```
 
-The project intentionally uses only the Python standard library at runtime. CI tests Python 3.11 and 3.12, runs the production gate, and uploads the JSON and HTML evidence as build artifacts.
+The core intentionally uses only the Python standard library at runtime. OpenTelemetry is an optional extra. CI tests Python 3.11 and 3.12, enforces lint, static typing, branch-aware coverage, schema validation, two production gates, package builds, and a hardened Docker build. CodeQL, dependency auditing, and Dependabot run separately.
 
 ## Scope and limitations
 
-The built-in scanners are deterministic guardrails, not a complete content-safety system. Regex PII detection can produce false positives; fact matching measures declared facts rather than arbitrary semantic entailment; and a self-reported model confidence score must be calibrated before production use. Treat this harness as a transparent foundation that can host stronger classifiers and judge models—not as a substitute for domain-specific security review.
+The built-in scanners are deterministic guardrails, not a complete content-safety system. Regex PII detection can produce false positives; deterministic semantic support is not full natural-language entailment; and self-reported confidence must be calibrated. Policy replay distinguishes what a saved trace proves—detectable findings, definite pre-execution blocks, and deterministic routes—from behavior that still requires a fresh model run. Rate limiting is process-local, so horizontally scaled workers still need a shared provider quota controller. ToolSandbox simulates isolated domain state; it is not an operating-system or network sandbox. Treat the harness as a transparent foundation, not a substitute for domain-specific authorization and security review.
 
 ## Where it fits
 

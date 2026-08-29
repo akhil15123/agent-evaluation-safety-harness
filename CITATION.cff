@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use Agent Harness in research or an evaluation report, cite this repository."
+title: "Agent Evaluation + Safety Harness"
+version: 1.0.0
+date-released: 2026-08-29
+authors:
+  - family-names: "Akhil"
+repository-code: "https://github.com/akhil15123/agent-evaluation-safety-harness"
+license: MIT

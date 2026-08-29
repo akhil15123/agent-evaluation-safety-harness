@@ -18,13 +18,45 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install -e . pytest
-      - run: pytest -q
-      - name: Run production gate
-        run: agent-harness run examples/support-suite.json --demo-agent --json report.json --html report.html
+      - run: python -m pip install --upgrade 'pip>=26.2'
+      - run: python -m pip install -e '.[dev]'
+      - run: ruff check src tests
+      - run: mypy src/agent_harness
+      - run: coverage run -m pytest -q
+      - run: coverage report && coverage xml
+      - name: Validate JSON schemas
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+          suite_schema = json.loads(Path('schemas/suite.schema.json').read_text())
+          policy_schema = json.loads(Path('schemas/policy.schema.json').read_text())
+          resolver = jsonschema.RefResolver.from_schema(suite_schema, store={'policy.schema.json': policy_schema, 'https://agent-harness.dev/schemas/policy.schema.json': policy_schema})
+          for path in [*Path('examples').glob('*suite.json'), *Path('benchmarks').glob('*.json')]:
+              jsonschema.validate(json.loads(path.read_text()), suite_schema, resolver=resolver)
+          PY
+      - name: Run deterministic production gates
+        run: |
+          agent-harness run examples/support-suite.json --demo-agent --json support-report.json --html support-report.html
+          agent-harness run examples/workflows-suite.json --workflow-agent --json workflow-report.json --html workflow-report.html --db harness.db
+          agent-harness experiment examples/workflows-suite.json --workflow-agent --trials 3 --workers 3 --output experiment.json
+      - run: python -m build
       - uses: actions/upload-artifact@v4
         with:
-          name: evaluation-report-py${{ matrix.python-version }}
+          name: evidence-py${{ matrix.python-version }}
           path: |
-            report.json
-            report.html
+            *-report.json
+            *-report.html
+            experiment.json
+            coverage.xml
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: agent-harness:ci

@@ -1,18 +1,29 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
+from pathlib import Path
 
-from .adapters import EchoAdapter, HttpAdapter, RecordedAdapter
+from .adapters import AgentAdapter, EchoAdapter, HttpAdapter, RecordedAdapter, ResilientAdapter
+from .calibration import calibrate_judge
 from .dashboard import write_regression_dashboard
 from .demo_agent import SupportAgentAdapter
 from .engine import EvaluationEngine
+from .experiment import ExperimentConfig, run_experiment
 from .forensics import compare_reports, write_comparison
+from .judge import judge_report
 from .loaders import SuiteValidationError, load_suite
+from .providers import OllamaChatAdapter, ProviderWorkflowAdapter
+from .redteam import generate_redteam
 from .replay import replay_policy
 from .reporting import write_html_report, write_json_report
-from .review import apply_review, write_review_queue
+from .review import apply_review, promote_reviewed_cases, write_review_queue
+from .server import serve_dashboard
+from .store import RunStore
+from .telemetry import export_open_telemetry, write_jsonl_trace
+from .workflows import WorkflowAgentAdapter
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,16 +32,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="Run an evaluation suite")
     run.add_argument("suite", help="Path to a JSON evaluation suite")
-    target = run.add_mutually_exclusive_group()
-    target.add_argument("--recorded", metavar="PATH", help="Use recorded responses from JSON")
-    target.add_argument("--endpoint", metavar="URL", help="POST cases to an HTTP agent endpoint")
-    target.add_argument("--demo-agent", action="store_true", help="Run the built-in tool-using support agent")
-    run.add_argument("--model", default="support-agent-v2", help="Model/version label for the demo agent")
-    run.add_argument("--header", action="append", default=[], metavar="NAME=VALUE", help="HTTP header; supports $ENV_VAR values")
+    _add_target_arguments(run)
     run.add_argument("--json", dest="json_path", default="report.json", help="JSON report path")
     run.add_argument("--html", dest="html_path", help="Self-contained HTML report path")
     run.add_argument("--review-queue", help="Write failed/ambiguous cases to this JSON file")
     run.add_argument("--label", help="Human-readable run label used by dashboards")
+    run.add_argument("--db", help="Persist this run and its review items to SQLite")
+    run.add_argument("--jsonl-trace", help="Append redacted step events to a JSONL file")
+    run.add_argument("--otel", action="store_true", help="Export the completed run through OpenTelemetry OTLP")
     run.add_argument("--no-fail", action="store_true", help="Always exit 0")
 
     dashboard = commands.add_parser("dashboard", help="Compare multiple evaluation reports")
@@ -54,6 +63,41 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("report", help="Saved report JSON")
     replay.add_argument("policy", help="Policy JSON")
     replay.add_argument("--output", default="policy-replay.json")
+
+    experiment = commands.add_parser("experiment", help="Run repeated concurrent trials with confidence intervals")
+    experiment.add_argument("suite")
+    _add_target_arguments(experiment)
+    experiment.add_argument("--trials", type=int, default=3)
+    experiment.add_argument("--workers", type=int, default=4)
+    experiment.add_argument("--seed", type=int)
+    experiment.add_argument("--output", default="experiment.json")
+
+    serve = commands.add_parser("serve", help="Start the persistent dashboard and human-review API")
+    serve.add_argument("--db", default="agent-harness.db")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--auth-token", help="Bearer token; defaults to AGENT_HARNESS_AUTH_TOKEN")
+
+    judge = commands.add_parser("judge", help="Add optional semantic judge-model scores to a report")
+    judge.add_argument("report")
+    judge.add_argument("--model", default="gpt-5-mini")
+    judge.add_argument("--output", default="judge-report.json")
+
+    redteam = commands.add_parser("generate-redteam", help="Generate lineage-preserving adversarial cases from a suite or failed report")
+    redteam.add_argument("source")
+    redteam.add_argument("--variants", type=int, default=3)
+    redteam.add_argument("--output", default="generated-redteam.json")
+
+    promote = commands.add_parser("promote-reviews", help="Promote explicit human decisions into a regression suite")
+    promote.add_argument("queue")
+    promote.add_argument("--output", default="human-regressions.json")
+    promote.add_argument("--suite-name", default="Human-reviewed regressions")
+
+    calibrate = commands.add_parser("calibrate-judge", help="Calibrate a judge threshold against reviewed pass/fail labels")
+    calibrate.add_argument("judge_report")
+    calibrate.add_argument("reviews")
+    calibrate.add_argument("--metric", default="task_completion")
+    calibrate.add_argument("--output", default="judge-calibration.json")
     return parser
 
 
@@ -81,30 +125,61 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Policy replay: {summary['pre_execution_blocks']} blocks, {summary['prevented_tool_calls']} tool calls prevented, {summary['human_routes']} human routes")
             print(f"Replay: {args.output}")
             return 0
+        if args.command == "experiment":
+            suite = load_suite(args.suite)
+            artifact = run_experiment(suite, lambda _trial: _adapter_from_args(args), ExperimentConfig(args.trials, args.workers, args.seed))
+            Path(args.output).write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
+            stats = artifact["statistics"]
+            print(f"Experiment: {stats['mean_pass_rate']:.0%} mean pass · 95% CI {stats['pass_rate_95ci']} · {len(stats['flaky_cases'])} flaky")
+            print(f"Experiment report: {args.output}")
+            return 0
+        if args.command == "serve":
+            serve_dashboard(args.db, args.host, args.port, args.auth_token)
+            return 0
+        if args.command == "judge":
+            artifact = judge_report(args.report, args.output, args.model)
+            print(f"Judged {len(artifact['cases'])} cases: {args.output}")
+            return 0
+        if args.command == "generate-redteam":
+            generated_suite = generate_redteam(args.source, args.output, args.variants)
+            print(f"Generated {len(generated_suite['cases'])} adversarial cases: {args.output}")
+            return 0
+        if args.command == "promote-reviews":
+            count = promote_reviewed_cases(args.queue, args.output, args.suite_name)
+            print(f"Promoted {count} reviewed cases: {args.output}")
+            return 0
+        if args.command == "calibrate-judge":
+            artifact = calibrate_judge(args.judge_report, args.reviews, args.output, args.metric)
+            print(f"Judge calibration: threshold {artifact['recommended_threshold']} · accuracy {artifact['accuracy']:.0%} · {args.output}")
+            return 0
         return _run(args)
-    except (SuiteValidationError, OSError, ValueError) as exc:
+    except (SuiteValidationError, OSError, RuntimeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
 
 def _run(args: argparse.Namespace) -> int:
     suite = load_suite(args.suite)
-    if args.recorded:
-        adapter = RecordedAdapter.from_file(args.recorded)
-    elif args.endpoint:
-        adapter = HttpAdapter(args.endpoint, headers=_parse_headers(args.header))
-    elif args.demo_agent:
-        adapter = SupportAgentAdapter(args.model)
-    else:
-        adapter = EchoAdapter()
+    adapter = _adapter_from_args(args)
     report = EvaluationEngine(adapter).run(suite)
-    report.metadata.update({"run_label": args.label or args.model, "harness_version": "0.2.0"})
+    model_label = args.model or _default_model(args)
+    report.metadata.update({"run_label": args.label or model_label, "harness_version": "1.0.0"})
     write_json_report(report, args.json_path)
     if args.html_path:
         write_html_report(report, args.html_path)
     if args.review_queue:
         review_count = write_review_queue(report, args.review_queue)
         print(f"Review queue: {args.review_queue} ({review_count} cases)")
+    report_dict = report.to_dict()
+    if args.db:
+        run_id = RunStore(args.db).ingest_report(report_dict, args.label)
+        print(f"Database run: {run_id}")
+    if args.jsonl_trace:
+        write_jsonl_trace(report_dict, args.jsonl_trace)
+        print(f"JSONL trace: {args.jsonl_trace}")
+    if args.otel:
+        count = export_open_telemetry(report_dict)
+        print(f"OpenTelemetry spans: {count}")
 
     summary = report.to_dict()["summary"]
     state = "PASS" if report.passed else "FAIL"
@@ -113,6 +188,55 @@ def _run(args: argparse.Namespace) -> int:
     if args.html_path:
         print(f"HTML report: {args.html_path}")
     return 0 if report.passed or args.no_fail else 1
+
+
+def _add_target_arguments(parser: argparse.ArgumentParser) -> None:
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument("--recorded", metavar="PATH", help="Use recorded responses from JSON")
+    target.add_argument("--endpoint", metavar="URL", help="POST cases to an HTTP agent endpoint")
+    target.add_argument("--demo-agent", action="store_true", help="Run the deterministic customer-support agent")
+    target.add_argument("--workflow-agent", action="store_true", help="Run the deterministic cross-workflow sandbox agent")
+    target.add_argument("--openai", action="store_true", help="Run a real OpenAI Responses API agent with isolated tools")
+    target.add_argument("--anthropic", action="store_true", help="Run a real Anthropic Messages API agent with isolated tools")
+    target.add_argument("--ollama", action="store_true", help="Run a local Ollama model")
+    parser.add_argument("--model", help="Provider model ID or local version label")
+    parser.add_argument("--header", action="append", default=[], metavar="NAME=VALUE", help="HTTP header; supports $ENV_VAR values")
+    parser.add_argument("--requests-per-second", type=float, default=0.0, help="Maximum adapter invocations per second")
+    parser.add_argument("--retries", type=int, default=2, help="Retries for rate limits and transient provider errors")
+
+
+def _default_model(args: argparse.Namespace) -> str:
+    if getattr(args, "openai", False):
+        return "gpt-5-mini"
+    if getattr(args, "anthropic", False):
+        return "claude-sonnet-4-20250514"
+    if getattr(args, "ollama", False):
+        return "llama3.2"
+    if getattr(args, "workflow_agent", False):
+        return "workflow-agent-v1"
+    return "support-agent-v2"
+
+
+def _adapter_from_args(args: argparse.Namespace) -> AgentAdapter:
+    model = args.model or _default_model(args)
+    adapter: AgentAdapter
+    if args.recorded:
+        adapter = RecordedAdapter.from_file(args.recorded)
+    elif args.endpoint:
+        adapter = HttpAdapter(args.endpoint, headers=_parse_headers(args.header))
+    elif args.demo_agent:
+        adapter = SupportAgentAdapter(model)
+    elif args.workflow_agent:
+        adapter = WorkflowAgentAdapter(model)
+    elif args.openai:
+        adapter = ProviderWorkflowAdapter("openai", model)
+    elif args.anthropic:
+        adapter = ProviderWorkflowAdapter("anthropic", model)
+    elif args.ollama:
+        adapter = OllamaChatAdapter(model)
+    else:
+        adapter = EchoAdapter()
+    return ResilientAdapter(adapter, args.requests_per_second, args.retries)
 
 
 def _parse_headers(values: list[str]) -> dict[str, str]:
