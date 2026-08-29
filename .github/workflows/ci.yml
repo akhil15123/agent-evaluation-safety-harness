@@ -42,7 +42,7 @@ jobs:
           agent-harness run examples/workflows-suite.json --workflow-agent --json workflow-report.json --html workflow-report.html --db harness.db
           agent-harness experiment examples/workflows-suite.json --workflow-agent --trials 3 --workers 3 --output experiment.json
       - run: python -m build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: evidence-py${{ matrix.python-version }}
           path: |
