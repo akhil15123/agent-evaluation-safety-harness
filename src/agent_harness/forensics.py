@@ -72,11 +72,99 @@ def _step_key(step: dict | None) -> dict | None:
     return {key: step.get(key) for key in ("type", "name", "input", "output", "status")}
 
 
+# Metric name -> True when an increase is an improvement.
+_DELTA_DIRECTION = {"quality": True, "tool_correctness": True, "risk": False, "hallucination_rate": False}
+_DELTA_LABELS = {"quality": "Quality", "tool_correctness": "Tools", "risk": "Risk", "hallucination_rate": "Halluc."}
+_STATUS_LABELS = {
+    "fixed": "Fixed",
+    "regressed": "Regressed",
+    "still_failing": "Still failing",
+    "stable_pass": "Stable pass",
+    "added": "Added",
+    "removed": "Removed",
+}
+
+
+def _delta_chip(name: str, value: float) -> str:
+    label = _DELTA_LABELS.get(name, name.replace("_", " ").title())
+    if abs(value) < 1e-9:
+        return f"<span class='chip flat'>{html.escape(label)} ±0</span>"
+    improved = (value > 0) == _DELTA_DIRECTION.get(name, True)
+    tone = "up" if improved else "down"
+    arrow = "▲" if value > 0 else "▼"
+    return f"<span class='chip {tone}' title='{html.escape(name)}: {value:+.4f}'>{html.escape(label)} {arrow} {abs(value) * 100:.0f}%</span>"
+
+
+def _divergence_cell(divergence: dict | None) -> str:
+    if not divergence:
+        return "<span class='layer none'>identical</span>"
+    layer = html.escape(str(divergence.get("layer", "execution")))
+    step = f" <span class='step'>step {divergence['step']}</span>" if divergence.get("step") else ""
+    detail = json.dumps({"before": divergence.get("before"), "after": divergence.get("after")}, indent=2, default=str)
+    return (
+        f"<details><summary><span class='layer'>{layer}</span>{step}</summary>"
+        f"<pre>{html.escape(detail)}</pre></details>"
+    )
+
+
 def write_comparison(comparison: dict, json_path: str, html_path: str | None = None) -> None:
     Path(json_path).write_text(json.dumps(comparison, indent=2) + "\n", encoding="utf-8")
     if not html_path:
         return
-    rows = "".join(f"<tr><td>{html.escape(case['case_id'])}</td><td class='{case['status']}'>{case['status'].replace('_', ' ')}</td><td>{html.escape((case.get('first_divergence') or {}).get('layer', 'none'))}</td><td><code>{html.escape(json.dumps(case.get('delta', {})))}</code></td></tr>" for case in comparison["cases"])
+    order = {"regressed": 0, "still_failing": 1, "fixed": 2, "added": 3, "removed": 4, "stable_pass": 5}
+    cases = sorted(comparison["cases"], key=lambda case: (order.get(case["status"], 9), case["case_id"]))
+    rows = "".join(
+        "<tr>"
+        f"<td class='case'>{html.escape(case['case_id'])}</td>"
+        f"<td><span class='status {case['status']}'>{_STATUS_LABELS.get(case['status'], case['status'])}</span></td>"
+        f"<td>{_divergence_cell(case.get('first_divergence'))}</td>"
+        f"<td><div class='deltas'>{''.join(_delta_chip(name, value) for name, value in case.get('delta', {}).items())}</div></td>"
+        "</tr>"
+        for case in cases
+    )
     summary = comparison["summary"]
-    document = f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Trace comparison</title><style>body{{background:#f4f7fb;color:#12213c;font:15px system-ui;margin:0}}main{{max-width:1050px;margin:45px auto;padding:0 20px}}h1{{font-size:34px}}.hero,table{{background:white;border:1px solid #dce3ef;border-radius:14px}}.hero{{padding:24px;margin-bottom:18px}}table{{border-collapse:separate;border-spacing:0;width:100%;overflow:hidden}}th,td{{padding:14px;border-bottom:1px solid #e3e8f0;text-align:left}}th{{color:#667085;font-size:12px}}.fixed{{color:#078061;font-weight:700}}.regressed,.still_failing{{color:#c13d52;font-weight:700}}code{{font-size:11px}}</style></head><body><main><div class="hero"><div>AGENT FLIGHT RECORDER</div><h1>{html.escape(comparison['baseline'])} → {html.escape(comparison['candidate'])}</h1><p>{summary['fixed']} fixed · {summary['regressed']} regressed · {summary['stable_pass']} stable</p></div><table><thead><tr><th>Case</th><th>Status</th><th>First divergence</th><th>Metric delta</th></tr></thead><tbody>{rows}</tbody></table></main></body></html>"""
+    tiles = "".join(
+        f"<div class='tile {key if summary.get(key) else 'zero'}'><strong>{summary.get(key, 0)}</strong><span>{label}</span></div>"
+        for key, label in (("fixed", "fixed"), ("regressed", "regressed"), ("still_failing", "still failing"), ("stable_pass", "stable"))
+    )
+    verdict = "No regressions" if not summary.get("regressed") else f"{summary['regressed']} regression(s)"
+    verdict_class = "ok" if not summary.get("regressed") else "bad"
+    style = """
+:root{--bg:#f4f7fb;--card:#fff;--line:#e3e8f0;--text:#12213c;--muted:#667085;--good:#067a5b;--good-bg:#e6f6f0;--bad:#b4233c;--bad-bg:#fdecef;--ink:#1d3a8a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1120px;margin:40px auto;padding:0 20px}
+.hero{background:linear-gradient(135deg,#0f1f47,#1d3a8a 60%,#2f5bd3);color:#fff;border-radius:18px;padding:28px 30px;box-shadow:0 20px 50px -25px rgba(15,31,71,.6)}
+.kicker{font-size:11px;letter-spacing:.14em;font-weight:700;opacity:.75}
+h1{font-size:clamp(24px,3.6vw,36px);margin:8px 0 6px;letter-spacing:-.02em}
+.verdict{display:inline-flex;gap:8px;align-items:center;padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;background:rgba(255,255,255,.14)}
+.verdict.ok::before{content:"✓"}.verdict.bad::before{content:"!"}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:grid;gap:2px}
+.tile strong{font-size:30px;line-height:1;font-variant-numeric:tabular-nums}.tile span{color:var(--muted);font-size:13px}
+.tile.zero strong{color:#98a2b3}.tile.fixed strong{color:var(--good)}.tile.regressed strong,.tile.still_failing strong{color:var(--bad)}
+.table-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:720px}
+th,td{padding:13px 16px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+tr:last-child td{border-bottom:0}tbody tr:hover{background:#f8fafd}
+th{color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.case{font:600 13px ui-monospace,SFMono-Regular,Menlo,monospace}
+.status{display:inline-block;white-space:nowrap;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#eef1f6;color:var(--muted)}
+.status.fixed{background:var(--good-bg);color:var(--good)}.status.regressed,.status.still_failing{background:var(--bad-bg);color:var(--bad)}
+.layer{display:inline-block;padding:2px 8px;border-radius:6px;background:#eaf0ff;color:var(--ink);font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace}
+.layer.none{background:#eef1f6;color:var(--muted)}.step{color:var(--muted);font-size:12px;margin-left:6px}
+details summary{cursor:pointer;list-style:none}details summary::-webkit-details-marker{display:none}
+details summary::after{content:" ▸";color:var(--muted);font-size:11px}details[open] summary::after{content:" ▾"}
+pre{margin:10px 0 0;padding:10px 12px;max-width:420px;max-height:260px;overflow:auto;background:#0f1f47;color:#dbe4ff;border-radius:10px;font-size:11.5px}
+.deltas{display:flex;flex-wrap:wrap;gap:6px}
+.chip{white-space:nowrap;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.chip.up{background:var(--good-bg);color:var(--good)}.chip.down{background:var(--bad-bg);color:var(--bad)}.chip.flat{background:#f1f3f7;color:#98a2b3}
+footer{color:var(--muted);font-size:12.5px;margin:14px 2px}
+@media(max-width:640px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.hero{padding:22px}}
+"""
+    document = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Trace comparison · {html.escape(comparison['baseline'])} → {html.escape(comparison['candidate'])}</title><style>{style}</style></head><body><main>
+<section class="hero"><div class="kicker">AGENT FLIGHT RECORDER · TRACE COMPARISON</div><h1>{html.escape(comparison['baseline'])} → {html.escape(comparison['candidate'])}</h1><span class="verdict {verdict_class}">{verdict}</span></section>
+<div class="tiles">{tiles}</div>
+<div class="table-wrap"><table><thead><tr><th>Case</th><th>Status</th><th>First divergence</th><th>Metric delta (candidate − baseline)</th></tr></thead><tbody>{rows}</tbody></table></div>
+<footer>Green means the change moved the metric in the safe direction (quality and tool correctness up, risk and hallucination down). Expand a divergence to see the first differing step.</footer>
+</main></body></html>"""
     Path(html_path).write_text(document, encoding="utf-8")

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Redesigned the review console: gate pills, pass-rate meters, per-case cards with a trace
+  timeline, evidence-capsule panel with suggested control, segmented pass/fail/ambiguous decision,
+  pending-count badge, and toasts. Same API, token flow and CSP.
+- Trace-comparison HTML now shows summary tiles, status pills, an expandable first-divergence step,
+  and signed metric-delta chips colored by safe direction instead of raw JSON. The JSON output is
+  unchanged.
+
 ## 1.0.0 — 2026-08-29
 
 - Added typed tool contracts, argument/order/trajectory evaluation, confirmation gates, canary egress blocking, and isolated workflow state.

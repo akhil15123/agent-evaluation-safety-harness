@@ -52,6 +52,19 @@ Watch the [real terminal walkthrough](docs/walkthrough/agent-harness.mp4), repla
 
 <img src="docs/walkthrough/agent-harness.gif" alt="Real Agent Harness CLI walkthrough" width="100%">
 
+### Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/console-runs.png" alt="Agent Harness Console runs view"><br><sub><b>Console · runs</b>: gate status, pass-rate meters, per-case quality/risk/confidence and a step-by-step trace timeline</sub></td>
+<td width="50%"><img src="docs/screenshots/console-review.png" alt="Agent Harness Console review queue"><br><sub><b>Console · review queue</b>: the evidence capsule (root cause, failed checks, fingerprint, suggested control) and a one-click human decision</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/trace-comparison.png" alt="Trace comparison report"><br><sub><b>Trace comparison</b>: fixed and regressed cases first, the first divergent step, and signed metric deltas colored by safe direction</sub></td>
+<td><img src="docs/screenshots/html-report.png" alt="Self-contained HTML run report"><br><sub><b>HTML run report</b>: a self-contained artifact for CI</sub></td>
+</tr>
+</table>
+
 ## Production capabilities
 
 - Typed tool contracts validate required fields, types, enums, patterns, and unknown arguments before execution.

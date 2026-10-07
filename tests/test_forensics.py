@@ -21,3 +21,16 @@ def test_counterfactual_policy_replay(tmp_path):
     assert replay["summary"]["pre_execution_blocks"] == 1
     assert replay["summary"]["human_routes"] == 1
     assert json.loads(output.read_text())["summary"] == replay["summary"]
+
+
+def test_comparison_html_renders_status_pills_and_signed_delta_chips(tmp_path):
+    from agent_harness.forensics import write_comparison
+
+    comparison = compare_reports(ROOT / "docs/runs/baseline-v1.json", ROOT / "docs/runs/guardrailed-v2.json")
+    write_comparison(comparison, tmp_path / "c.json", tmp_path / "c.html")
+    page = (tmp_path / "c.html").read_text()
+    assert "<span class='status fixed'>Fixed</span>" in page
+    # risk went down on a fixed case, which is an improvement
+    assert "chip up" in page and "Risk ▼" in page
+    assert "{&quot;quality&quot;" not in page  # no raw JSON dicts in the delta column
+    assert json.loads((tmp_path / "c.json").read_text()) == comparison
